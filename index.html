@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Performance Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f0f2f7;
+    --surface: #ffffff;
+    --surface2: #f8f9fc;
+    --border: #e4e8f0;
+    --text-primary: #1a2035;
+    --text-secondary: #5a6580;
+    --text-muted: #9aa0b4;
+    --blue: #1a56db;
+    --blue-light: #dbeafe;
+    --green: #0d9f6e;
+    --green-light: #d1fae5;
+    --red: #e02424;
+    --red-light: #fde8e8;
+    --yellow: #c27803;
+    --yellow-light: #fef3c7;
+    --orange: #d05e0a;
+    --orange-light: #ffedd5;
+    --navy: #1e3a5f;
+    --purple: #6c3fc5;
+    --teal: #0d7490;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 25px rgba(0,0,0,0.10), 0 4px 10px rgba(0,0,0,0.05);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  body {
+    font-family: 'Sora', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #1a56db 100%);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.25);
+  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .header-logo {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: white;
+    box-shadow: 0 0 20px rgba(96,165,250,0.4);
+  }
+  .header-title { color: white; }
+  .header-title h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .header-title p { font-size: 12px; color: rgba(255,255,255,0.6); font-weight: 300; margin-top: 1px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .last-updated { font-size: 11px; color: rgba(255,255,255,0.55); font-family: 'JetBrains Mono', monospace; }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-section {
+    padding: 28px 32px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .upload-area {
+    flex: 1; min-width: 280px;
+    border: 2px dashed var(--blue);
+    border-radius: var(--radius);
+    padding: 22px 28px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--blue-light);
+    display: flex; align-items: center; gap: 16px;
+  }
+  .upload-area:hover { background: #bfdbfe; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .upload-area.drag-over { border-color: var(--green); background: var(--green-light); }
+  .upload-icon { font-size: 32px; }
+  .upload-text h3 { font-size: 14px; font-weight: 600; color: var(--blue); }
+  .upload-text p { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  #fileInput { display: none; }
+
+  .filter-group {
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap;
+  }
+  .filter-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+  select.filter-select {
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--surface2);
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+    min-width: 180px;
+  }
+  select.filter-select:focus { border-color: var(--blue); }
+
+  .file-name-badge {
+    background: var(--green-light);
+    color: var(--green);
+    border: 1px solid #a7f3d0;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    display: none;
+    align-items: center; gap: 6px;
+  }
+
+  /* ── DASHBOARD BODY ── */
+  .dashboard { padding: 24px 32px; }
+
+  /* ── KPI CARDS ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .kpi-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .kpi-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .kpi-card.blue::before { background: linear-gradient(90deg, #1a56db, #60a5fa); }
+  .kpi-card.green::before { background: linear-gradient(90deg, #0d9f6e, #34d399); }
+  .kpi-card.red::before { background: linear-gradient(90deg, #e02424, #f87171); }
+  .kpi-card::after {
+    content: attr(data-icon);
+    position: absolute; bottom: -8px; right: -4px;
+    font-size: 56px; opacity: 0.06;
+    pointer-events: none; line-height: 1;
+  }
+  .kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); }
+  .kpi-value { font-size: 36px; font-weight: 700; line-height: 1.1; margin-top: 6px; font-family: 'JetBrains Mono', monospace; }
+  .kpi-card.blue .kpi-value { color: var(--blue); }
+  .kpi-card.green .kpi-value { color: var(--green); }
+  .kpi-card.red .kpi-value { color: var(--red); }
+  .kpi-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ── CHART GRID ── */
+  .chart-grid {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .grid-60-40 { grid-template-columns: 3fr 2fr; }
+
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+    transition: box-shadow 0.2s;
+  }
+  .card:hover { box-shadow: var(--shadow-md); }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title {
+    font-size: 13px; font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.1px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .card-badge {
+    font-size: 10px; font-weight: 600;
+    padding: 3px 8px; border-radius: 10px;
+    background: var(--surface2); color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .chart-wrap { position: relative; }
+
+  /* ── MATRIX TABLE ── */
+  .matrix-wrap {
+    overflow-x: auto;
+    max-height: 380px;
+    overflow-y: auto;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+  }
+  .matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .matrix-table th {
+    background: #f0f4ff;
+    padding: 8px 10px;
+    text-align: center;
+    font-weight: 700;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    position: sticky;
+    top: 0; z-index: 2;
+    white-space: nowrap;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .matrix-table th:first-child {
+    left: 0; z-index: 3;
+    text-align: left;
+    min-width: 90px;
+  }
+  .matrix-table td {
+    padding: 6px 10px;
+    border: 1px solid #eef0f5;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    transition: opacity 0.15s;
+  }
+  .matrix-table td:first-child {
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    font-size: 11px;
+    text-align: left;
+    color: var(--text-primary);
+    background: #f8f9fc;
+    position: sticky;
+    left: 0; z-index: 1;
+    border-right: 2px solid var(--border);
+  }
+  .matrix-table tr:hover td { background-color: #f0f4ff !important; }
+  .matrix-table tr:hover td:first-child { background-color: #e8eeff !important; }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+  }
+  .empty-icon { font-size: 64px; margin-bottom: 16px; opacity: 0.5; }
+  .empty-title { font-size: 18px; font-weight: 700; color: var(--text-secondary); }
+  .empty-sub { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 1100px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .grid-2, .grid-3, .grid-60-40 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 700px) {
+    .dashboard { padding: 16px; }
+    .upload-section { padding: 20px 16px; }
+    .header { padding: 14px 16px; }
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">P</div>
+    <div class="header-title">
+      <h1>PROMET Performance Dashboard</h1>
+      <p>Task Monitoring & Progress Analytics</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="last-updated" id="lastUpdated">No data loaded</span>
+  </div>
+</div>
+
+<!-- UPLOAD & FILTER -->
+<div class="upload-section">
+  <div class="upload-area" id="uploadArea">
+    <div class="upload-icon">📊</div>
+    <div class="upload-text">
+      <h3>Upload Excel or CSV File</h3>
+      <p>Drag & drop or click to browse (.xlsx, .xls, .csv)</p>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+  </div>
+  <div class="file-name-badge" id="fileNameBadge">
+    <span>✅</span><span id="fileNameText"></span>
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">🏢 Department:</span>
+    <select class="filter-select" id="deptFilter">
+      <option value="All">All Departments</option>
+    </select>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="dashboard" id="dashboardBody">
+  <!-- EMPTY STATE -->
+  <div class="empty-state" id="emptyState">
+    <div class="empty-icon">📂</div>
+    <div class="empty-title">No Data Loaded</div>
+    <div class="empty-sub">Upload an Excel or CSV file to generate the dashboard</div>
+  </div>
+
+  <!-- CONTENT (hidden until data loaded) -->
+  <div id="dashboardContent" style="display:none">
+
+    <!-- KPI CARDS -->
+    <div class="kpi-grid">
+      <div class="kpi-card blue" data-icon="📋">
+        <div class="kpi-label">Total Tasks</div>
+        <div class="kpi-value" id="kpiTotal">—</div>
+        <div class="kpi-sub">Active task codes</div>
+      </div>
+      <div class="kpi-card green" data-icon="📈">
+        <div class="kpi-label">Average Achievement (%)</div>
+        <div class="kpi-value" id="kpiAvgAch">—</div>
+        <div class="kpi-sub">Mean across all tasks</div>
+      </div>
+      <div class="kpi-card green" data-icon="✅">
+        <div class="kpi-label">Tasks On Track</div>
+        <div class="kpi-value" id="kpiOnTrack">—</div>
+        <div class="kpi-sub">Performance status = On Track</div>
+      </div>
+      <div class="kpi-card red" data-icon="⚠️">
+        <div class="kpi-label">Overdue Tasks</div>
+        <div class="kpi-value" id="kpiOverdue">—</div>
+        <div class="kpi-sub">Overdue status = Overdue</div>
+      </div>
+    </div>
+
+    <!-- ROW 1: Task Performance vs Planned Timeline (full width) -->
+    <div class="chart-grid" style="grid-template-columns:1fr; margin-bottom:16px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-dot" style="background:var(--green)"></div>
+            Task Performance vs Planned Timeline
+          </div>
+          <span class="card-badge" id="badgePerf">0 tasks</span>
+        </div>
+        <div class="chart-wrap" style="height:260px">
+          <canvas id="chartPerf"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 2: Gap Analysis + Progress Category -->
+    <div class="chart-grid grid-2" style="margin-bottom:16px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-dot" style="background:var(--red)"></div>
+            Performance Gap Analysis
+          </div>
+          <span class="card-badge" id="badgeGap">—</span>
+        </div>
+        <div class="chart-wrap" style="height:220px">
+          <canvas id="chartGap"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-dot" style="background:var(--blue)"></div>
+            Tasks by Progress Category
+          </div>
+          <span class="card-badge" id="badgeProgress">—</span>
+        </div>
+        <div class="chart-wrap" style="height:220px">
+          <canvas id="chartProgress"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 3: Tasks by Dept + Avg Achievement by Dept -->
+    <div class="chart-grid grid-2" style="margin-bottom:16px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-dot" style="background:var(--navy)"></div>
+            Tasks by Department
+          </div>
+          <span class="card-badge" id="badgeDeptCount">—</span>
+        </div>
+        <div class="chart-wrap" style="height:280px">
+          <canvas id="chartDeptCount"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-dot" style="background:var(--teal)"></div>
+            Avg Achievement by Department
+          </div>
+          <span class="card-badge" id="badgeDeptAch">—</span>
+        </div>
+        <div class="chart-wrap" style="height:280px">
+          <canvas id="chartDeptAch"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 4: Challenges + Delay Donut -->
+    <div class="chart-grid grid-60-40" style="margin-bottom:16px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-dot" style="background:var(--orange)"></div>
+            Challenges & Root Causes
+          </div>
+          <span class="card-badge" id="badgeChallenges">—</span>
+        </div>
+        <div class="chart-wrap" style="height:280px">
+          <canvas id="chartChallenges"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-dot" style="background:var(--purple)"></div>
+            Delay Distribution
+          </div>
+          <span class="card-badge" id="badgeDelay">—</span>
+        </div>
+        <div class="chart-wrap" style="height:280px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+          <canvas id="chartDelay" style="max-height:220px; max-width:220px;"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 5: Task Details Matrix -->
+    <div class="chart-grid" style="grid-template-columns:1fr; margin-bottom:16px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-dot" style="background:var(--purple)"></div>
+            Task Details — Achievement Matrix
+          </div>
+          <span class="card-badge" id="badgeMatrix">—</span>
+        </div>
+        <div class="matrix-wrap" id="matrixWrap">
+          <table class="matrix-table" id="matrixTable"></table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ───────────────────────────────────────────
+// STATE
+// ───────────────────────────────────────────
+let rawData = [];
+let charts = {};
+
+// ───────────────────────────────────────────
+// UPLOAD HANDLING
+// ───────────────────────────────────────────
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault(); uploadArea.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    let wb;
+    if (file.name.endsWith('.csv')) {
+      wb = XLSX.read(e.target.result, { type: 'string' });
+    } else {
+      wb = XLSX.read(e.target.result, { type: 'array' });
+    }
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    rawData = normalizeData(json);
+    populateDeptFilter(rawData);
+    document.getElementById('fileNameText').textContent = file.name;
+    const badge = document.getElementById('fileNameBadge');
+    badge.style.display = 'flex';
+    document.getElementById('lastUpdated').textContent = 'Updated: ' + new Date().toLocaleString();
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('dashboardContent').style.display = 'block';
+    renderAll('All');
+  };
+  if (file.name.endsWith('.csv')) reader.readAsText(file);
+  else reader.readAsArrayBuffer(file);
+}
+
+// ───────────────────────────────────────────
+// DATA NORMALIZATION
+// ───────────────────────────────────────────
+function normalizeData(rows) {
+  return rows.map(r => {
+    // Flexible column name matching
+    const get = (...keys) => {
+      for (const k of keys) {
+        const found = Object.keys(r).find(c => c.trim().toLowerCase().replace(/\s+/g,'') === k.toLowerCase().replace(/\s+/g,''));
+        if (found !== undefined && r[found] !== '' && r[found] !== null && r[found] !== undefined) return r[found];
+      }
+      return '';
+    };
+
+    const taskCode   = String(get('TaskCode','Task Code') || '').trim();
+    const department = String(get('Department') || '').trim();
+    const achievement = parseFloat(get('achievement','Achievement','Achievement(%)')) || 0;
+    const timeline   = parseFloat(get('Timeline(%)','Timeline') || 0);
+    const perfStatus = String(get('PerformanceStatus','Performance Status') || '').trim();
+    const overdueStatus = String(get('OverdueStatus','Overdue Status') || '').trim();
+    const delayStatus = String(get('DelayStatus','Delay Status') || '').trim();
+    const progressCat = String(get('ProgressCategory','Progress Category') || '').trim();
+    const challengeType = String(get('ChallengesType','Challenges Type','Challenges Type   ') || '').trim();
+    const evidenceType = String(get('EvidenceType','Evidence Type') || '').trim();
+
+    // Gap calculation
+    let gap = parseFloat(get('Gap','Gap ') || '');
+    if (isNaN(gap)) gap = timeline - achievement;
+
+    let gapCat = String(get('GapCategory','Gap Category') || '').trim();
+    if (!gapCat) {
+      if (gap < 10) gapCat = 'Minor';
+      else if (gap < 30) gapCat = 'Moderate';
+      else gapCat = 'Critical';
+    }
+
+    return { taskCode, department, achievement, timeline, perfStatus, overdueStatus, delayStatus, progressCat, challengeType, evidenceType, gap, gapCat };
+  }).filter(r => r.taskCode || r.department);
+}
+
+// ───────────────────────────────────────────
+// DEPT FILTER
+// ───────────────────────────────────────────
+function populateDeptFilter(data) {
+  const sel = document.getElementById('deptFilter');
+  const depts = [...new Set(data.map(r => r.department).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="All">All Departments</option>';
+  depts.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    sel.appendChild(opt);
+  });
+}
+document.getElementById('deptFilter').addEventListener('change', e => renderAll(e.target.value));
+
+function filterData(dept) {
+  return dept === 'All' ? rawData : rawData.filter(r => r.department === dept);
+}
+
+// ───────────────────────────────────────────
+// RENDER ALL
+// ───────────────────────────────────────────
+function renderAll(dept) {
+  const data = filterData(dept);
+  renderKPIs(data);
+  renderPerf(data);
+  renderGap(data);
+  renderProgress(data);
+  renderDeptCount(data);
+  renderDeptAch(data);
+  renderChallenges(data);
+  renderDelay(data);
+  renderMatrix(data);
+}
+
+// ───────────────────────────────────────────
+// KPIs
+// ───────────────────────────────────────────
+function renderKPIs(data) {
+  document.getElementById('kpiTotal').textContent = data.length;
+  const avg = data.length ? (data.reduce((s,r) => s + r.achievement, 0) / data.length) : 0;
+  document.getElementById('kpiAvgAch').textContent = avg.toFixed(1) + '%';
+  document.getElementById('kpiOnTrack').textContent = data.filter(r => r.perfStatus === 'On Track').length;
+  document.getElementById('kpiOverdue').textContent = data.filter(r => r.overdueStatus === 'Overdue').length;
+}
+
+// ───────────────────────────────────────────
+// CHART HELPER
+// ───────────────────────────────────────────
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+const tooltip = {
+  backgroundColor: '#1a2035',
+  titleColor: '#fff',
+  bodyColor: 'rgba(255,255,255,0.8)',
+  padding: 10,
+  cornerRadius: 8,
+  titleFont: { family: 'Sora', size: 12, weight: '600' },
+  bodyFont: { family: 'JetBrains Mono', size: 11 },
+};
+
+// ───────────────────────────────────────────
+// 1. TASK PERFORMANCE vs PLANNED TIMELINE
+// ───────────────────────────────────────────
+function renderPerf(data) {
+  destroyChart('perf');
+  // Aggregate by Task Code
+  const map = {};
+  data.forEach(r => {
+    if (!r.taskCode) return;
+    if (!map[r.taskCode]) map[r.taskCode] = { ach: [], tl: [] };
+    map[r.taskCode].ach.push(r.achievement);
+    map[r.taskCode].tl.push(r.timeline);
+  });
+  const codes = Object.keys(map).sort();
+  const achVals = codes.map(c => avg(map[c].ach));
+  const tlVals  = codes.map(c => avg(map[c].tl));
+  document.getElementById('badgePerf').textContent = codes.length + ' tasks';
+
+  const ctx = document.getElementById('chartPerf').getContext('2d');
+  charts.perf = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: codes,
+      datasets: [
+        {
+          label: 'Avg Achievement (%)',
+          data: achVals,
+          backgroundColor: 'rgba(13,159,110,0.85)',
+          borderRadius: 4,
+          barPercentage: 0.7,
+        },
+        {
+          label: 'Avg Timeline (%)',
+          data: tlVals,
+          backgroundColor: 'rgba(30,58,95,0.85)',
+          borderRadius: 4,
+          barPercentage: 0.7,
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { font: { family: 'Sora', size: 11 }, boxWidth: 12 } }, tooltip },
+      scales: {
+        x: { ticks: { font: { family: 'JetBrains Mono', size: 9 }, maxRotation: 45 }, grid: { display: false } },
+        y: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { family: 'Sora', size: 10 } }, grid: { color: '#eef0f5' } }
+      }
+    }
+  });
+}
+
+// ───────────────────────────────────────────
+// 2. PERFORMANCE GAP ANALYSIS
+// ───────────────────────────────────────────
+function renderGap(data) {
+  destroyChart('gap');
+  const order = ['Minor', 'Moderate', 'Critical'];
+  const cats = order.filter(c => data.some(r => r.gapCat === c));
+  const counts = cats.map(c => data.filter(r => r.gapCat === c).length);
+  const colors = { Minor: 'rgba(13,159,110,0.85)', Moderate: 'rgba(194,120,3,0.85)', Critical: 'rgba(224,36,36,0.85)' };
+  document.getElementById('badgeGap').textContent = data.length + ' tasks';
+
+  const ctx = document.getElementById('chartGap').getContext('2d');
+  charts.gap = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: cats,
+      datasets: [{ label: 'Task Count', data: counts, backgroundColor: cats.map(c => colors[c]), borderRadius: 6 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip },
+      scales: {
+        x: { ticks: { font: { family: 'Sora', size: 10 } }, grid: { color: '#eef0f5' } },
+        y: { ticks: { font: { family: 'Sora', size: 11, weight: '600' } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ───────────────────────────────────────────
+// 3. PROGRESS CATEGORY
+// ───────────────────────────────────────────
+function renderProgress(data) {
+  destroyChart('progress');
+  const order = ['Completed', 'Good progress', 'Satisfactory', 'Small progress', 'Very little progress'];
+  const cats = order.filter(c => data.some(r => r.progressCat === c));
+  const counts = cats.map(c => data.filter(r => r.progressCat === c).length);
+  const colors = {
+    'Completed': 'rgba(13,159,110,0.85)',
+    'Good progress': 'rgba(13,116,144,0.85)',
+    'Satisfactory': 'rgba(194,120,3,0.85)',
+    'Small progress': 'rgba(208,94,10,0.85)',
+    'Very little progress': 'rgba(224,36,36,0.85)'
+  };
+  document.getElementById('badgeProgress').textContent = data.length + ' tasks';
+
+  const ctx = document.getElementById('chartProgress').getContext('2d');
+  charts.progress = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: cats,
+      datasets: [{ label: 'Task Count', data: counts, backgroundColor: cats.map(c => colors[c]), borderRadius: 6 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip },
+      scales: {
+        x: { ticks: { font: { family: 'Sora', size: 10 } }, grid: { color: '#eef0f5' } },
+        y: { ticks: { font: { family: 'Sora', size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ───────────────────────────────────────────
+// 4. TASKS BY DEPARTMENT
+// ───────────────────────────────────────────
+function renderDeptCount(data) {
+  destroyChart('deptCount');
+  const map = {};
+  data.forEach(r => { if (r.department) map[r.department] = (map[r.department] || 0) + 1; });
+  const sorted = Object.entries(map).sort((a,b) => b[1]-a[1]);
+  const labels = sorted.map(x => x[0]);
+  const vals   = sorted.map(x => x[1]);
+  document.getElementById('badgeDeptCount').textContent = labels.length + ' depts';
+
+  const ctx = document.getElementById('chartDeptCount').getContext('2d');
+  charts.deptCount = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Tasks', data: vals, backgroundColor: 'rgba(30,58,95,0.8)', borderRadius: 5 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip },
+      scales: {
+        x: { ticks: { font: { family: 'Sora', size: 10 } }, grid: { color: '#eef0f5' } },
+        y: { ticks: { font: { family: 'JetBrains Mono', size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ───────────────────────────────────────────
+// 5. AVG ACHIEVEMENT BY DEPARTMENT
+// ───────────────────────────────────────────
+function renderDeptAch(data) {
+  destroyChart('deptAch');
+  const map = {};
+  data.forEach(r => {
+    if (!r.department) return;
+    if (!map[r.department]) map[r.department] = [];
+    map[r.department].push(r.achievement);
+  });
+  const sorted = Object.entries(map)
+    .map(([d,a]) => [d, avg(a)])
+    .sort((a,b) => b[1]-a[1]);
+  const labels = sorted.map(x => x[0]);
+  const vals   = sorted.map(x => parseFloat(x[1].toFixed(1)));
+  document.getElementById('badgeDeptAch').textContent = labels.length + ' depts';
+
+  const ctx = document.getElementById('chartDeptAch').getContext('2d');
+  charts.deptAch = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Avg Achievement (%)',
+        data: vals,
+        backgroundColor: vals.map(v => v >= 80 ? 'rgba(13,159,110,0.85)' : v >= 60 ? 'rgba(194,120,3,0.85)' : 'rgba(224,36,36,0.85)'),
+        borderRadius: 5
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip },
+      scales: {
+        x: { ticks: { font: { family: 'JetBrains Mono', size: 9 }, maxRotation: 45 }, grid: { display: false } },
+        y: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { family: 'Sora', size: 10 } }, grid: { color: '#eef0f5' } }
+      }
+    }
+  });
+}
+
+// ───────────────────────────────────────────
+// 6. CHALLENGES & ROOT CAUSES
+// ───────────────────────────────────────────
+function renderChallenges(data) {
+  destroyChart('challenges');
+  const map = {};
+  data.forEach(r => {
+    const ch = r.challengeType.trim();
+    if (!ch) return;
+    map[ch] = (map[ch] || 0) + 1;
+  });
+  const sorted = Object.entries(map).sort((a,b) => b[1]-a[1]);
+  const labels = sorted.map(x => x[0]);
+  const vals   = sorted.map(x => x[1]);
+  const maxVal = vals[0];
+  const bgColors = vals.map(v => v === maxVal ? 'rgba(224,36,36,0.85)' : 'rgba(26,86,219,0.75)');
+  document.getElementById('badgeChallenges').textContent = labels.length + ' types';
+
+  const ctx = document.getElementById('chartChallenges').getContext('2d');
+  charts.challenges = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Tasks', data: vals, backgroundColor: bgColors, borderRadius: 5 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip },
+      scales: {
+        x: { ticks: { font: { family: 'Sora', size: 10 } }, grid: { color: '#eef0f5' } },
+        y: { ticks: { font: { family: 'Sora', size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ───────────────────────────────────────────
+// 7. DELAY DISTRIBUTION (DONUT)
+// ───────────────────────────────────────────
+function renderDelay(data) {
+  destroyChart('delay');
+  const statuses = ['In Progress', 'On Time', 'Delayed'];
+  const colors   = { 'In Progress': '#1a56db', 'On Time': '#0d9f6e', 'Delayed': '#e02424' };
+  const counts   = statuses.map(s => data.filter(r => r.delayStatus === s).length);
+  const labels   = statuses.filter((s,i) => counts[i] > 0);
+  const vals     = counts.filter(c => c > 0);
+  document.getElementById('badgeDelay').textContent = data.length + ' tasks';
+
+  const ctx = document.getElementById('chartDelay').getContext('2d');
+  charts.delay = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: vals,
+        backgroundColor: labels.map(l => colors[l]),
+        borderWidth: 2, borderColor: '#fff',
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      cutout: '60%',
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { family: 'Sora', size: 11 }, padding: 12, boxWidth: 12 } },
+        tooltip
+      }
+    }
+  });
+}
+
+// ───────────────────────────────────────────
+// 8. TASK DETAILS MATRIX
+// ───────────────────────────────────────────
+function renderMatrix(data) {
+  const departments = [...new Set(data.map(r => r.department).filter(Boolean))].sort();
+  const taskCodes   = [...new Set(data.map(r => r.taskCode).filter(Boolean))].sort();
+
+  // Build lookup: taskCode -> dept -> avg achievement
+  const lookup = {};
+  data.forEach(r => {
+    if (!r.taskCode || !r.department) return;
+    if (!lookup[r.taskCode]) lookup[r.taskCode] = {};
+    if (!lookup[r.taskCode][r.department]) lookup[r.taskCode][r.department] = [];
+    lookup[r.taskCode][r.department].push(r.achievement);
+  });
+
+  document.getElementById('badgeMatrix').textContent = taskCodes.length + ' tasks × ' + departments.length + ' depts';
+
+  const table = document.getElementById('matrixTable');
+  // Header
+  let html = '<thead><tr><th>Task Code</th>';
+  departments.forEach(d => { html += `<th>${d}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  taskCodes.forEach(tc => {
+    html += `<tr><td>${tc}</td>`;
+    departments.forEach(d => {
+      const vals = lookup[tc] && lookup[tc][d];
+      if (vals && vals.length > 0) {
+        const v = avg(vals);
+        const { bg, fg } = achievementColor(v);
+        html += `<td style="background:${bg};color:${fg};font-weight:600;">${v.toFixed(0)}%</td>`;
+      } else {
+        html += '<td></td>';
+      }
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+function achievementColor(v) {
+  if (v >= 80) return { bg: '#d1fae5', fg: '#065f46' };
+  if (v >= 60) return { bg: '#fef3c7', fg: '#92400e' };
+  return { bg: '#fde8e8', fg: '#9b1c1c' };
+}
+
+// ───────────────────────────────────────────
+// UTILITIES
+// ───────────────────────────────────────────
+function avg(arr) { return arr.length ? arr.reduce((s,v) => s+v, 0) / arr.length : 0; }
+</script>
+</body>
+</html>
